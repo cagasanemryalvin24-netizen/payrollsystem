@@ -90,21 +90,20 @@
         <a href="../dashboard.php">Dashboard</a>
         <a href="index.php" class="active">Employees</a>
         <a href="../payroll_history.php">History</a>
+        <a href="../warehouse/index.php">Warehouse</a>
     </nav>
 </div>
 
 <div class="main">
     <?php
-    $result = $conn->query("
+    $employees = $pdo->query("
         SELECT e.*, d.department_name,
                (SELECT status     FROM payroll WHERE employee_id = e.employee_id ORDER BY pay_date DESC LIMIT 1) AS last_status,
                (SELECT pay_period FROM payroll WHERE employee_id = e.employee_id ORDER BY pay_date DESC LIMIT 1) AS last_period
         FROM employees e
         JOIN departments d ON e.department_id = d.department_id
         ORDER BY e.employee_id ASC
-    ");
-    $employees  = [];
-    while ($row = $result->fetch_assoc()) $employees[] = $row;
+    ")->fetchAll();
     $total      = count($employees);
     $avg_salary = $total ? array_sum(array_column($employees, 'salary')) / $total : 0;
     $depts      = count(array_unique(array_column($employees, 'department_id')));

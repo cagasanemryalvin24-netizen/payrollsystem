@@ -1,26 +1,29 @@
 <?php include '../config/database.php';
 
+$error = '';
 if (isset($_POST['submit'])) {
-    $fname     = $conn->real_escape_string($_POST['first_name']);
-    $lname     = $conn->real_escape_string($_POST['last_name']);
-    $email     = $conn->real_escape_string($_POST['email']);
-    $position  = $conn->real_escape_string($_POST['position']);
-    $salary    = $conn->real_escape_string($_POST['salary']);
-    $hire_date = $conn->real_escape_string($_POST['hire_date']);
-    $dept      = $conn->real_escape_string($_POST['department_id']);
-
-    $sql = "INSERT INTO employees (first_name, last_name, email, position, salary, hire_date, department_id)
-            VALUES ('$fname','$lname','$email','$position','$salary','$hire_date','$dept')";
-
-    if ($conn->query($sql)) {
+    // PDO prepared statement - prevents SQL injection
+    try {
+        $stmt = $pdo->prepare("INSERT INTO employees
+            (first_name, last_name, email, position, salary, hire_date, department_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([
+            trim($_POST['first_name']),
+            trim($_POST['last_name']),
+            trim($_POST['email']),
+            trim($_POST['position']),
+            (float)$_POST['salary'],
+            trim($_POST['hire_date']),
+            (int)$_POST['department_id'],
+        ]);
         header("Location: index.php");
         exit;
-    } else {
-        $error = $conn->error;
+    } catch (PDOException $e) {
+        $error = $e->getMessage();
     }
 }
 
-$departments = $conn->query("SELECT * FROM departments ORDER BY department_name");
+$departments = $pdo->query("SELECT * FROM departments ORDER BY department_name")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -113,6 +116,7 @@ $departments = $conn->query("SELECT * FROM departments ORDER BY department_name"
         <a href="../dashboard.php">Dashboard</a>
         <a href="index.php" class="active">Employees</a>
         <a href="../payroll_history.php">History</a>
+        <a href="../warehouse/index.php">Warehouse</a>
     </nav>
 </div>
 
@@ -153,12 +157,11 @@ $departments = $conn->query("SELECT * FROM departments ORDER BY department_name"
                     <select name="department_id" required>
                         <option value="">Select department…</option>
                         <?php
-                        $departments->data_seek(0);
-                        while ($d = $departments->fetch_assoc()):
+                        foreach ($departments as $d):
                             $sel = (isset($_POST['department_id']) && $_POST['department_id'] == $d['department_id']) ? 'selected' : '';
                         ?>
                         <option value="<?= $d['department_id'] ?>" <?= $sel ?>><?= htmlspecialchars($d['department_name']) ?></option>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 

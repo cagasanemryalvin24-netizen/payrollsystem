@@ -4,17 +4,27 @@ $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if (!$id) { header("Location: index.php"); exit; }
 
-$result = $conn->query("SELECT e.*, d.department_name FROM employees e JOIN departments d ON e.department_id = d.department_id WHERE e.employee_id = $id");
-$row    = $result->fetch_assoc();
+$s = $pdo->prepare("SELECT e.*, d.department_name FROM employees e JOIN departments d ON e.department_id = d.department_id WHERE e.employee_id = ?");
+$s->execute([$id]);
+$row = $s->fetch();
 
 if (!$row) { header("Location: index.php"); exit; }
 
 if (isset($_POST['confirm_delete'])) {
-    // Remove payroll records first to avoid FK constraint
-    $conn->query("DELETE FROM payroll WHERE employee_id = $id");
-    $conn->query("DELETE FROM employees WHERE employee_id = $id");
-    header("Location: index.php");
-    exit;
+    // Transaction: delete payroll first, then employee (referential integrity)
+    try {
+        $pdo->beginTransaction();
+        $pdo->prepare("DELETE FROM fact_payroll WHERE emp_key IN (SELECT emp_key FROM dim_employee WHERE employee_id = ?)")->execute([$id]);
+        $pdo->prepare("DELETE FROM dim_employee WHERE employee_id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM payroll WHERE employee_id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM employees WHERE employee_id = ?")->execute([$id]);
+        $pdo->commit();
+        header("Location: index.php");
+        exit;
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        $deleteError = $e->getMessage();
+    }
 }
 
 $initials = strtoupper(substr($row['first_name'],0,1) . substr($row['last_name'],0,1));
@@ -148,6 +158,7 @@ $hire     = date('M d, Y', strtotime($row['hire_date']));
         <a href="../dashboard.php">Dashboard</a>
         <a href="index.php" class="active">Employees</a>
         <a href="../payroll_history.php">History</a>
+        <a href="../warehouse/index.php">Warehouse</a>
     </nav>
 </div>
 

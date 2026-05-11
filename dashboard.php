@@ -77,6 +77,7 @@
         <a href="dashboard.php" class="active">Dashboard</a>
         <a href="employees/index.php">Employees</a>
         <a href="payroll_history.php">History</a>
+        <a href="warehouse/index.php">Warehouse</a>
     </nav>
 </div>
 
@@ -88,11 +89,11 @@
     </div>
 
     <?php
-    $total_employees    = $conn->query("SELECT COUNT(*) AS c FROM employees")->fetch_assoc()['c'];
-    $total_payroll_recs = $conn->query("SELECT COUNT(*) AS c FROM payroll")->fetch_assoc()['c'];
-    $total_paid_result  = $conn->query("SELECT SUM(amount_paid) AS s FROM payroll WHERE status='Paid'")->fetch_assoc()['s'];
+    $total_employees    = $pdo->query("SELECT COUNT(*) FROM employees")->fetchColumn();
+    $total_payroll_recs = $pdo->query("SELECT COUNT(*) FROM payroll")->fetchColumn();
+    $total_paid_result  = $pdo->query("SELECT SUM(amount_paid) FROM payroll WHERE status='Paid'")->fetchColumn();
     $total_paid         = $total_paid_result ? $total_paid_result : 0;
-    $last_date_row      = $conn->query("SELECT MAX(pay_date) AS d FROM payroll")->fetch_assoc()['d'];
+    $last_date_row      = $pdo->query("SELECT MAX(pay_date) FROM payroll")->fetchColumn();
     $last_payroll_date  = $last_date_row ? date("M d, Y", strtotime($last_date_row)) : 'N/A';
     ?>
 
@@ -134,7 +135,7 @@
             </thead>
             <tbody>
             <?php
-            $recent = $conn->query("
+            $recent_stmt = $pdo->query("
                 SELECT p.payroll_id,
                        CONCAT(e.first_name,' ',e.last_name) AS emp_name,
                        d.department_name, p.pay_period, p.amount_paid, p.status
@@ -143,7 +144,7 @@
                 JOIN departments d ON e.department_id = d.department_id
                 ORDER BY p.pay_date DESC LIMIT 10
             ");
-            while ($r = $recent->fetch_assoc()):
+            foreach ($recent_stmt->fetchAll() as $r):
             ?>
             <tr>
                 <td style="color:var(--text-dim)"><?= $r['payroll_id'] ?></td>
@@ -157,7 +158,7 @@
                     </span>
                 </td>
             </tr>
-            <?php endwhile; ?>
+            <?php endforeach; ?>
             </tbody>
         </table>
     </div>

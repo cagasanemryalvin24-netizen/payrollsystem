@@ -4,35 +4,39 @@ $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if (!$id) { header("Location: index.php"); exit; }
 
-$result = $conn->query("SELECT * FROM employees WHERE employee_id = $id");
-$row    = $result->fetch_assoc();
+$s = $pdo->prepare("SELECT * FROM employees WHERE employee_id = ?");
+$s->execute([$id]);
+$row = $s->fetch();
 
 if (!$row) { header("Location: index.php"); exit; }
 
+$error = '';
 if (isset($_POST['update'])) {
-    $fname    = $conn->real_escape_string($_POST['first_name']);
-    $lname    = $conn->real_escape_string($_POST['last_name']);
-    $email    = $conn->real_escape_string($_POST['email']);
-    $position = $conn->real_escape_string($_POST['position']);
-    $salary   = $conn->real_escape_string($_POST['salary']);
-    $hire     = $conn->real_escape_string($_POST['hire_date']);
-    $dept     = (int)$_POST['department_id'];
-
-    $sql = "UPDATE employees SET
-                first_name='$fname', last_name='$lname', email='$email',
-                position='$position', salary='$salary', hire_date='$hire',
-                department_id=$dept
-            WHERE employee_id=$id";
-
-    if ($conn->query($sql)) {
+    // PDO prepared statement - secure update with version bump
+    try {
+        $upd = $pdo->prepare("UPDATE employees SET
+            first_name=?, last_name=?, email=?, position=?,
+            salary=?, hire_date=?, department_id=?,
+            version = version + 1
+            WHERE employee_id=?");
+        $upd->execute([
+            trim($_POST['first_name']),
+            trim($_POST['last_name']),
+            trim($_POST['email']),
+            trim($_POST['position']),
+            (float)$_POST['salary'],
+            trim($_POST['hire_date']),
+            (int)$_POST['department_id'],
+            $id,
+        ]);
         header("Location: index.php");
         exit;
-    } else {
-        $error = $conn->error;
+    } catch (PDOException $e) {
+        $error = $e->getMessage();
     }
 }
 
-$departments = $conn->query("SELECT * FROM departments ORDER BY department_name");
+$departments = $pdo->query("SELECT * FROM departments ORDER BY department_name")->fetchAll();
 $initials    = strtoupper(substr($row['first_name'],0,1) . substr($row['last_name'],0,1));
 ?>
 <!DOCTYPE html>
@@ -122,6 +126,7 @@ $initials    = strtoupper(substr($row['first_name'],0,1) . substr($row['last_nam
         <a href="../dashboard.php">Dashboard</a>
         <a href="index.php" class="active">Employees</a>
         <a href="../payroll_history.php">History</a>
+        <a href="../warehouse/index.php">Warehouse</a>
     </nav>
 </div>
 
@@ -173,12 +178,12 @@ $initials    = strtoupper(substr($row['first_name'],0,1) . substr($row['last_nam
                         <option value="">Select department…</option>
                         <?php
                         $departments->data_seek(0);
-                        while ($d = $departments->fetch_assoc()):
+                        foreach ($departments as $d):
                             $current_dept = $_POST['department_id'] ?? $row['department_id'];
                             $sel = ($current_dept == $d['department_id']) ? 'selected' : '';
                         ?>
                         <option value="<?= $d['department_id'] ?>" <?= $sel ?>><?= htmlspecialchars($d['department_name']) ?></option>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 

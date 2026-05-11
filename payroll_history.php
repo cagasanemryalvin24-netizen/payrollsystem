@@ -83,6 +83,7 @@
         <a href="dashboard.php">Dashboard</a>
         <a href="employees/index.php">Employees</a>
         <a href="payroll_history.php" class="active">History</a>
+        <a href="warehouse/index.php">Warehouse</a>
     </nav>
 </div>
 
@@ -100,12 +101,12 @@
                 <select name="department">
                     <option value="">All</option>
                     <?php
-                    $dept_list = $conn->query("SELECT department_name FROM departments ORDER BY department_name");
-                    while ($d = $dept_list->fetch_assoc()):
+                    $dept_list = $pdo->query("SELECT department_name FROM departments ORDER BY department_name")->fetchAll();
+                    foreach ($dept_list as $d):
                         $sel = (isset($_GET['department']) && $_GET['department'] === $d['department_name']) ? 'selected' : '';
                     ?>
                     <option value="<?= htmlspecialchars($d['department_name']) ?>" <?= $sel ?>><?= htmlspecialchars($d['department_name']) ?></option>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="filter-group">
@@ -119,14 +120,15 @@
 
     <?php
     // Build query — NO default filters, show everything unless user filters
-    $where = [];
+    $where  = [];
+    $params = [];
     if (!empty($_GET['department'])) {
-        $dept    = $conn->real_escape_string($_GET['department']);
-        $where[] = "d.department_name = '$dept'";
+        $where[]  = "d.department_name = ?";
+        $params[] = $_GET['department'];
     }
     if (!empty($_GET['year'])) {
-        $year    = (int)$_GET['year'];
-        $where[] = "YEAR(p.pay_date) = $year";
+        $where[]  = "YEAR(p.pay_date) = ?";
+        $params[] = (int)$_GET['year'];
     }
     $whereSQL = count($where) ? "WHERE " . implode(" AND ", $where) : "";
 
@@ -142,9 +144,9 @@
         ORDER BY p.pay_date DESC, p.payroll_id DESC
     ";
 
-    $result        = $conn->query($sql);
-    $rows          = [];
-    while ($r = $result->fetch_assoc()) $rows[] = $r;
+    $stmt2 = $pdo->prepare($sql);
+    $stmt2->execute($params);
+    $rows = $stmt2->fetchAll();
 
     $total_records = count($rows);
     $total_amount  = array_sum(array_column($rows, 'amount_paid'));
