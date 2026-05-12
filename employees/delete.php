@@ -11,7 +11,6 @@ $row = $s->fetch();
 if (!$row) { header("Location: index.php"); exit; }
 
 if (isset($_POST['confirm_delete'])) {
-    // Transaction: delete payroll first, then employee (referential integrity)
     try {
         $pdo->beginTransaction();
         $pdo->prepare("DELETE FROM fact_payroll WHERE emp_key IN (SELECT emp_key FROM dim_employee WHERE employee_id = ?)")->execute([$id]);

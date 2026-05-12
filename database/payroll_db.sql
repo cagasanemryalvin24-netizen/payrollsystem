@@ -1,15 +1,7 @@
--- ============================================================
---  payroll_db.sql  -  IT221 Final Term PIT
---  Full database: OLTP tables, star schema, views,
---  stored procedures, advanced SQL, concurrency control
--- ============================================================
-
 CREATE DATABASE IF NOT EXISTS payroll_db;
 USE payroll_db;
 
--- ============================================================
--- SECTION 1: OLTP TABLES
--- ============================================================
+-- OLTP TABLES
 
 CREATE TABLE IF NOT EXISTS departments (
     department_id   INT          NOT NULL AUTO_INCREMENT,
@@ -18,7 +10,7 @@ CREATE TABLE IF NOT EXISTS departments (
     PRIMARY KEY (department_id)
 );
 
--- version column = optimistic concurrency control
+-- optimistic concurrency control
 CREATE TABLE IF NOT EXISTS employees (
     employee_id   INT            NOT NULL AUTO_INCREMENT,
     first_name    VARCHAR(50)    NOT NULL,
@@ -46,9 +38,7 @@ CREATE TABLE IF NOT EXISTS payroll (
         ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
--- ============================================================
--- SECTION 2: SAMPLE DATA
--- ============================================================
+-- SAMPLE DATA
 
 INSERT INTO departments (department_name, location) VALUES
     ('Engineering', 'Building A'),
@@ -72,11 +62,9 @@ INSERT INTO payroll (employee_id, amount_paid, pay_date, pay_period, status) VAL
     (3, 32000.00, '2026-03-31', 'March 2026', 'Paid'),
     (4, 36000.00, '2026-03-31', 'March 2026', 'Paid');
 
--- ============================================================
--- SECTION 3: ADVANCED SQL - VIEWS
--- ============================================================
+-- ADVANCED SQL - VIEWS
 
--- VIEW 1: Full payroll detail (JOIN across 3 tables)
+-- Full payroll detail 
 CREATE OR REPLACE VIEW vw_payroll_detail AS
 SELECT
     p.payroll_id,
@@ -94,7 +82,7 @@ FROM payroll p
 JOIN employees   e ON p.employee_id    = e.employee_id
 JOIN departments d ON e.department_id  = d.department_id;
 
--- VIEW 2: Department summary with correlated subqueries
+-- Department summary with correlated subqueries
 CREATE OR REPLACE VIEW vw_department_summary AS
 SELECT
     d.department_id,
@@ -115,7 +103,7 @@ FROM departments d
 LEFT JOIN employees e ON d.department_id = e.department_id
 GROUP BY d.department_id, d.department_name, d.location;
 
--- VIEW 3: Above-average salary (subquery)
+-- Above-average salary 
 CREATE OR REPLACE VIEW vw_above_avg_salary AS
 SELECT
     e.employee_id,
@@ -179,17 +167,14 @@ CREATE TABLE IF NOT EXISTS fact_payroll (
     FOREIGN KEY (dept_key) REFERENCES dim_department(dept_key)
 );
 
--- ============================================================
--- SECTION 5: ETL STORED PROCEDURE
--- ============================================================
-
+--  ETL STORED PROCEDURE
 DROP PROCEDURE IF EXISTS run_etl;
 
 DELIMITER $$
 
 CREATE PROCEDURE run_etl()
 BEGIN
-    -- Step 1: Populate dim_date
+    -- Populate dim_date
     INSERT INTO dim_date (date_key, full_date, day_of_month, month_num, month_name, quarter, year)
     SELECT DISTINCT
         CAST(DATE_FORMAT(pay_date, '%Y%m%d') AS UNSIGNED),
@@ -202,7 +187,7 @@ BEGIN
     FROM payroll
     ON DUPLICATE KEY UPDATE full_date = VALUES(full_date);
 
-    -- Step 2: Populate dim_employee
+    -- Populate dim_employee
     INSERT INTO dim_employee (employee_id, full_name, position, hire_date)
     SELECT
         employee_id,
@@ -214,14 +199,14 @@ BEGIN
         full_name = VALUES(full_name),
         position  = VALUES(position);
 
-    -- Step 3: Populate dim_department
+    -- Populate dim_department
     INSERT INTO dim_department (department_id, department_name, location)
     SELECT department_id, department_name, location FROM departments
     ON DUPLICATE KEY UPDATE
         department_name = VALUES(department_name),
         location        = VALUES(location);
 
-    -- Step 4: Populate fact_payroll (incremental - skip existing)
+    -- Populate fact_payroll
     INSERT INTO fact_payroll
         (date_key, emp_key, dept_key, payroll_id, amount_paid, base_salary, pay_period, status)
     SELECT
@@ -250,10 +235,8 @@ END$$
 
 DELIMITER ;
 
--- ============================================================
--- SECTION 6: DATA MART VIEW (on star schema)
--- ============================================================
 
+-- DATA MART VIEW (on star schema)
 CREATE OR REPLACE VIEW vw_dept_mart AS
 SELECT
     dd.department_name,
@@ -271,9 +254,7 @@ JOIN dim_department dd ON fp.dept_key = dd.dept_key
 JOIN dim_date       dt ON fp.date_key = dt.date_key
 GROUP BY dd.dept_key, dd.department_name, dd.location;
 
--- ============================================================
--- SECTION 7: QUICK VERIFICATION QUERIES
--- ============================================================
+-- QUICK VERIFICATION QUERIES
 
 SELECT COUNT(*) AS total_employees    FROM employees;
 SELECT COUNT(*) AS total_payroll      FROM payroll;

@@ -1,8 +1,4 @@
 <?php
-// warehouse/index.php – Data Warehouse & ETL
-// Demonstrates: Star Schema, ETL (stored procedure), Window Functions,
-//               Subqueries, Views, Data Mart
-
 include '../config/database.php';
 
 $etlMessage = '';
@@ -11,13 +7,9 @@ $etlLog     = [];
 // ── Run ETL via stored procedure ──────────────────────────────────────────────
 if (isset($_POST['run_etl'])) {
     try {
-        // Use prepare+execute so we can consume ALL result sets the procedure returns.
-        // CALL returns multiple result sets; if we don't drain them, PDO throws
-        // SQLSTATE[HY000]: General error: 2014 (pending result sets).
         $callStmt = $pdo->prepare("CALL run_etl()");
         $callStmt->execute();
 
-        // Drain every result set the stored procedure emits
         do { $callStmt->fetchAll(); } while ($callStmt->nextRowset());
         $callStmt->closeCursor();
         unset($callStmt);
@@ -25,7 +17,6 @@ if (isset($_POST['run_etl'])) {
         $etlMessage = 'success';
         $etlLog[]   = "CALL run_etl() executed at " . date('Y-m-d H:i:s');
 
-        // Now safe to run more queries – capture row counts
         $counts = [
             'fact_payroll'   => (int)$pdo->query("SELECT COUNT(*) FROM fact_payroll")->fetchColumn(),
             'dim_employee'   => (int)$pdo->query("SELECT COUNT(*) FROM dim_employee")->fetchColumn(),
@@ -59,7 +50,6 @@ $dimDeptCount= tableCount($pdo, 'dim_department');
 $dimDateCount= tableCount($pdo, 'dim_date');
 
 // ── Window Functions: salary rank within department ───────────────────────────
-// Uses RANK(), DENSE_RANK(), SUM() OVER(PARTITION BY …)
 $windowSQL = "
     SELECT
         CONCAT(e.first_name, ' ', e.last_name) AS full_name,

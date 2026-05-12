@@ -12,7 +12,6 @@ if (!$row) { header("Location: index.php"); exit; }
 
 $error = '';
 if (isset($_POST['update'])) {
-    // PDO prepared statement - secure update with version bump
     try {
         $upd = $pdo->prepare("UPDATE employees SET
             first_name=?, last_name=?, email=?, position=?,

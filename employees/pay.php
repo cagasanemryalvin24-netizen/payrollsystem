@@ -1,15 +1,9 @@
 <?php
-// pay.php – Process Payroll
-// Demonstrates: Transaction Management (BEGIN/COMMIT/ROLLBACK)
-//               Concurrency Control (SELECT FOR UPDATE + version column)
-//               Prepared Statements / PDO
-
 include '../config/database.php';
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if (!$id) { header("Location: index.php"); exit; }
 
-// Fetch employee with version (optimistic lock info)
 $stmt = $pdo->prepare("
     SELECT e.*, d.department_name
     FROM employees e
@@ -22,14 +16,14 @@ if (!$row) { header("Location: index.php"); exit; }
 
 $success = '';
 $error   = '';
-$txLog   = [];  // transaction log to display to user
+$txLog   = [];
 
 if (isset($_POST['process_pay'])) {
     $amount      = (float)$_POST['amount'];
     $pay_date    = trim($_POST['pay_date']);
     $pay_period  = trim($_POST['pay_period']);
     $status      = trim($_POST['status']);
-    $ver_at_load = (int)$_POST['version'];   // version snapshot from form
+    $ver_at_load = (int)$_POST['version'];
 
     if (empty($pay_date) || empty($pay_period) || $amount <= 0) {
         $error = "Please fill in all fields with valid values.";
@@ -39,9 +33,6 @@ if (isset($_POST['process_pay'])) {
             $pdo->beginTransaction();
             $txLog[] = "BEGIN TRANSACTION";
 
-            // ── CONCURRENCY CONTROL: SELECT FOR UPDATE ───────────────
-            // Acquires a row-level exclusive lock so no other session can
-            // modify this employee record until we COMMIT or ROLLBACK.
             $lock = $pdo->prepare("
                 SELECT employee_id, version, salary
                 FROM employees
@@ -52,9 +43,6 @@ if (isset($_POST['process_pay'])) {
             $locked = $lock->fetch();
             $txLog[] = "SELECT FOR UPDATE on employee #$id (locked row)";
 
-            // ── OPTIMISTIC VERSION CHECK ─────────────────────────────
-            // Compare the version the user loaded vs. current DB version.
-            // If they differ, another session edited the record first.
             if ($locked['version'] !== $ver_at_load) {
                 throw new Exception(
                     "Concurrency conflict: employee record was modified by another session "
@@ -84,7 +72,7 @@ if (isset($_POST['process_pay'])) {
             $newId = $pdo->lastInsertId();
             $txLog[] = "INSERT payroll record (ID = $newId)";
 
-            // ── BUMP VERSION (prevents stale reads by others) ────────
+            // ── BUMP VERSION ────────
             $upd = $pdo->prepare("
                 UPDATE employees
                 SET version = version + 1
@@ -98,8 +86,6 @@ if (isset($_POST['process_pay'])) {
             $txLog[] = "COMMIT – transaction successful";
 
             $success = "Payroll processed successfully (Record #$newId).";
-
-            // Refresh employee row to get new version
             $stmt->execute([$id]);
             $row = $stmt->fetch();
 
@@ -115,7 +101,6 @@ if (isset($_POST['process_pay'])) {
     }
 }
 
-// Fetch last 5 payroll records for this employee
 $history = $pdo->prepare("SELECT * FROM payroll WHERE employee_id = ? ORDER BY pay_date DESC LIMIT 5");
 $history->execute([$id]);
 $histRows = $history->fetchAll();
@@ -215,7 +200,7 @@ td{padding:12px 16px;color:var(--text)}
         <div class="avatar" style="background:<?= $color ?>22;color:<?= $color ?>"><?= $initials ?></div>
         <div>
             <div class="emp-name-text"><?= htmlspecialchars($row['first_name'].' '.$row['last_name']) ?></div>
-            <div class="emp-meta"><?= htmlspecialchars($row['position']) ?> &middot; <?= htmlspecialchars($row['department_name']) ?> &middot; v<?= $row['version'] ?></div>
+            <div class="emp-meta"><?= htmlspecialchars($row['position']) ?> &middot; <?= htmlspecialchars($row['department_name']) ?> &middot; v<?= $row['version'] ?? 1 ?></div>
         </div>
         <div class="salary-tag">
             <div class="slabel">Base Salary</div>
@@ -228,7 +213,7 @@ td{padding:12px 16px;color:var(--text)}
         <strong>Concurrency Control active.</strong>
         This form uses <code>SELECT FOR UPDATE</code> (pessimistic locking) plus a <code>version</code>
         column (optimistic locking) to prevent double-payment if two users submit at the same time.
-        Current version: <strong><?= $row['version'] ?></strong>
+        Current version: <strong><?= $row['version'] ?? 1 ?></strong>
     </div>
 
     <?php if ($error): ?>
@@ -238,7 +223,6 @@ td{padding:12px 16px;color:var(--text)}
     <div class="alert-success">&#10003; <?= htmlspecialchars($success) ?></div>
     <?php endif; ?>
 
-    <!-- Transaction log display -->
     <?php if (!empty($txLog)): ?>
     <div class="tx-log">
         <div class="tx-log-title">Transaction Log</div>
@@ -257,8 +241,7 @@ td{padding:12px 16px;color:var(--text)}
     <div class="form-card">
         <div class="card-title">Payroll Details</div>
         <form method="POST" action="">
-            <!-- Hidden version for optimistic locking -->
-            <input type="hidden" name="version" value="<?= $row['version'] ?>">
+            <input type="hidden" name="version" value="<?= $row['version'] ?? 1 ?>">
             <div class="form-grid">
                 <div class="form-group">
                     <label>Amount (PHP)</label>
